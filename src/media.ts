@@ -76,7 +76,7 @@ class MediaSingleton extends EventEmitter implements IMediaDevices {
     }
 
     try {
-      const { state } = await navigator.permissions.query({ name: 'microphone' });
+      const { state } = await (navigator as any).permissions.query({ name: 'microphone' });
       if (state === 'granted') {
         return;
       }

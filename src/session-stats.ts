@@ -109,7 +109,7 @@ export class SessionStats extends EventEmitter {
    * @param {RTCStatsReport} stats - Stats returned by `pc.getStats()`
    * @return {boolean} False if report did not contain any useful stats.
    */
-  private add(stats: RTCStatsReport): boolean {
+  private add(stats: RTCStatsReport | any): boolean {
     let inbound: any;
     let candidatePair: any;
 

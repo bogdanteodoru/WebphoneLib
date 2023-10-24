@@ -33,7 +33,7 @@ export function sessionDescriptionHandlerFactory(session, options): SessionDescr
   (sdh as any).on('addTrack', async (track, stream) => {
     const pc = session.sessionDescriptionHandler.peerConnection;
     // eslint-disable-next-line prefer-rest-params
-    log.debug('addTrack' + arguments, 'sessionDescriptionHandlerFactory');
+    log.debug('addTrack' + (arguments as any), 'sessionDescriptionHandlerFactory');
 
     let remoteStream = new MediaStream();
     if (pc.getReceivers) {

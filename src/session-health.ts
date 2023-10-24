@@ -36,9 +36,9 @@ export function checkAudioConnected(
       } else {
         let noAudioTimeoutLeft = noAudioTimeout;
         const checkStats = () => {
-          pc.getStats().then((stats: RTCStatsReport) => {
+          pc.getStats().then((stats: RTCStatsReport | any) => {
             const buckets = Array.from(stats.values());
-            const outbound = buckets.find(obj => obj.type === 'outbound-rtp');
+            const outbound: any = buckets.find((obj: any) => obj.type === 'outbound-rtp');
             if (outbound && outbound.packetsSent > 0) {
               resolve();
             } else {
