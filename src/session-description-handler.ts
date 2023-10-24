@@ -30,7 +30,7 @@ export function sessionDescriptionHandlerFactory(session, options): SessionDescr
     return session.__streams.localStream.stream;
   };
 
-  (sdh as any).on('addTrack', async (track, stream) => {
+  (sdh as any).on('addTrack', async function(track, stream) {
     const pc = session.sessionDescriptionHandler.peerConnection;
     // eslint-disable-next-line prefer-rest-params
     log.debug('addTrack' + (arguments as any), 'sessionDescriptionHandlerFactory');
