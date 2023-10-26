@@ -19,6 +19,7 @@ log.connector = ({ level, context, message }) => {
 
 let account;
 let transport;
+let realmURI;
 
 export let client;
 
@@ -52,6 +53,7 @@ export function setAccount(user, password, realm) {
     uri,
     name: 'test'
   };
+  realmURI = realm;
 }
 
 export function setClient() {
@@ -59,7 +61,15 @@ export function setClient() {
     account,
     transport,
     media,
-    userAgentString: 'WebphoneLib Demo'
+    userAgentString: 'WebphoneLib Demo',
+    registererOptions: {
+      requestOptions: {
+        extraHeaders: [`X-Session-ID: ${String(new Date().getTime())}`]
+      }
+    },
+    settings: {
+      noHealthCheck: true
+    }
   });
 }
 
@@ -68,6 +78,10 @@ export const callingEvents = eventTarget();
 function onClientStatusUpdate(status) {
   logger.info(`Account status changed to ${status}`);
   callingEvents.dispatchEvent(new CustomEvent('clientStatusUpdate', { detail: { status } }));
+}
+
+function onClientMessage(message) {
+  logger.info(`Got message ${message}`);
 }
 
 export const subscriptions = {};
@@ -93,14 +107,17 @@ export const subscriptionEvents = eventTarget();
 export function registerAccount() {
   logger.info('Trying to register account.');
   client.on('statusUpdate', onClientStatusUpdate);
+  client.on('sessionMessage', onClientMessage);
   client.on('subscriptionNotify', onSubscriptionStatusUpdate);
   client.on('sessionAdded', onSessionsUpdated);
   client.on('sessionRemoved', onSessionsUpdated);
   client.on('invite', onInvite);
+
   client
     .connect()
     .then(async () => {
       console.log('connected!');
+      sendMessage();
     })
     .catch(e => {
       logger.error(e);
@@ -240,4 +257,15 @@ export function createPublisher(contact, options) {
   }
 
   return client.createPublisher(contact, options);
+}
+
+export function sendMessage() {
+  if (client && !client.isConnected()) {
+    return;
+  }
+
+  client.sendMessage(`sip:${account.user}@${realmURI}`, JSON.stringify({
+    cmd: "get-status",
+    args: { async: true }
+  }))
 }

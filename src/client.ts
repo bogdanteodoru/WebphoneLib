@@ -20,6 +20,7 @@ import { statusFromDialog } from './subscription';
 import { second } from './time';
 import { ITransport, ReconnectableTransport, TransportFactory, UAFactory } from './transport';
 import { IClientOptions, IMedia } from './types';
+import { RegistererRegisterOptions } from "sip.js/lib/api/registerer-register-options";
 
 // TODO: use EventTarget instead of EventEmitter.
 
@@ -35,7 +36,7 @@ export interface IClient {
   /**
    * Connect (and subsequently register) to server.
    */
-  connect(): Promise<boolean>;
+  connect(options?: RegistererRegisterOptions): Promise<boolean>;
 
   /**
    * Unregister (and subsequently disconnect) to server.
@@ -134,6 +135,11 @@ export interface IClient {
    * is emitted.
    */
   on(event: 'sessionRemoved', listener: ({ id }) => void): this;
+
+  /**
+   * When a session receives a MESSAGE event
+   */
+  on(event: 'sessionMessage', listener: (message: string) => void): this;
   /* tslint:enable:unified-signatures */
 }
 
@@ -355,6 +361,14 @@ export class ClientImpl extends EventEmitter implements IClient {
     return this.transport.createPublisher(contact, options);
   }
 
+  public sendMessage(destination: string, message: string) {
+    if (!this.transport.registeredPromise) {
+      throw new Error('Register first!');
+    }
+
+    return this.transport.sendMessage(destination, message);
+  }
+
   private configureTransport(uaFactory: UAFactory, options: IClientOptions) {
     this.transport = this.transportFactory(uaFactory, options);
 
@@ -403,6 +417,8 @@ export class ClientImpl extends EventEmitter implements IClient {
       }
       this.emit('statusUpdate', status);
     });
+
+    this.transport.on('sessionMessage', message => this.emit('sessionMessage', message))
   }
 
   private onSessionTerminated(sessionId: string) {
@@ -530,6 +546,7 @@ export const Client: ClientCtor = (function(clientOptions: IClientOptions) {
     'removeListener',
     'resubscribe',
     'subscribe',
-    'unsubscribe'
+    'unsubscribe',
+    'sendMessage',
   ]);
 } as any) as ClientCtor;

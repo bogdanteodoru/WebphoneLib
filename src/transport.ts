@@ -22,6 +22,9 @@ import { log } from './logger';
 import { sessionDescriptionHandlerFactory } from './session-description-handler';
 import { hour, second } from './time';
 import { IClientOptions, IRetry } from './types';
+import { RegistererRegisterOptions } from "sip.js/lib/api/registerer-register-options";
+import { Message } from "sip.js/lib/api/message";
+import { Messager } from "sip.js/lib/api/messager";
 
 export type UAFactory = (options: UserAgentOptions) => UserAgent;
 
@@ -47,7 +50,7 @@ export interface ITransport extends EventEmitter {
   delegate?: ITransportDelegate;
 
   configure(options: IClientOptions): void;
-  connect(): Promise<boolean>;
+  connect(options?: RegistererRegisterOptions): Promise<boolean>;
   disconnect(options?: { hasRegistered: boolean }): Promise<void>;
   updatePriority(flag: boolean): void;
   getConnection(mode: ReconnectionMode): Promise<boolean>;
@@ -55,6 +58,7 @@ export interface ITransport extends EventEmitter {
   createInviter(phoneNumber: string): Inviter;
   createSubscriber(contact: string): Subscriber;
   createPublisher(contact: string, options: PublisherOptions): Publisher;
+  sendMessage(destination: string, message: string): Promise<void>;
 }
 
 /**
@@ -110,7 +114,7 @@ export class ReconnectableTransport extends EventEmitter implements ITransport {
   public delegate?: ITransportDelegate;
   private priority = false;
   private unregisteredPromise: Promise<any>;
-  private uaFactory: UAFactory;
+  private readonly uaFactory: UAFactory;
   private uaOptions: UserAgentOptions;
   private userAgent: UserAgent;
   private dyingCounter = 60000;
@@ -119,16 +123,20 @@ export class ReconnectableTransport extends EventEmitter implements ITransport {
   private retry: IRetry = { interval: 2000, limit: 30000, timeout: 250 };
   private registerer: Registerer;
   private unregisterer: Registerer;
-  private boundOnWindowOffline: EventListenerOrEventListenerObject;
-  private boundOnWindowOnline: EventListenerOrEventListenerObject;
+  private readonly boundOnWindowOffline: EventListenerOrEventListenerObject;
+  private readonly boundOnWindowOnline: EventListenerOrEventListenerObject;
   private wasWindowOffline = false;
   private healthChecker: HealthChecker;
+  private readonly registererOptions: RegistererRegisterOptions;
+  private readonly noHealthCheck: boolean;
 
   constructor(uaFactory: UAFactory, options: IClientOptions) {
     super();
 
     this.uaFactory = uaFactory;
     this.configure(options);
+    this.registererOptions = options.registererOptions || {};
+    this.noHealthCheck = options.settings.noHealthCheck || false;
 
     this.boundOnWindowOffline = this.onWindowOffline.bind(this);
     this.boundOnWindowOnline = this.tryUntilConnected.bind(this);
@@ -172,7 +180,7 @@ export class ReconnectableTransport extends EventEmitter implements ITransport {
         wsServers: transport.wsServers
       },
       uri,
-      userAgentString
+      userAgentString,
     };
   }
 
@@ -215,10 +223,10 @@ export class ReconnectableTransport extends EventEmitter implements ITransport {
     this.createHealthChecker();
 
     this.registeredPromise = this.createRegisteredPromise();
-    this.registerer.register();
+    this.registerer.register(this.registererOptions);
 
     return this.registeredPromise.then(success => {
-      this.healthChecker.start();
+      if (!this.noHealthCheck) this.healthChecker.start();
       return success;
     });
   }
@@ -278,6 +286,23 @@ export class ReconnectableTransport extends EventEmitter implements ITransport {
     return new Inviter(this.userAgent, UserAgent.makeURI(phoneNumber));
   }
 
+  /**
+   * Send a message.
+   * @remarks
+   * Send a MESSAGE request.
+   * @param destination - The target destination for the message. A SIP address to send the MESSAGE to.
+   * @param message
+   */
+  public async sendMessage(destination: string, message: string): Promise<void> {
+    log.info(`Sending message...`, this.constructor.name);
+
+    const target = UserAgent.makeURI(destination);
+    if (!target) {
+      return Promise.reject(new Error(`Failed to create a valid URI from "${destination}"`));
+    }
+    return new Messager(this.userAgent, target, message).message();
+  }
+
   public createSubscriber(contact: string): Subscriber {
     // Introducing a jitter here, to avoid thundering herds.
     return new Subscriber(this.userAgent, UserAgent.makeURI(contact), 'dialog', {
@@ -313,14 +338,14 @@ export class ReconnectableTransport extends EventEmitter implements ITransport {
       log.debug('Socket opened', this.constructor.name);
 
       this.registeredPromise = this.createRegisteredPromise();
-      this.registerer.register();
+      this.registerer.register(this.registererOptions);
 
       this.createHealthChecker();
 
       await this.registeredPromise;
       log.debug('Reregistered!', this.constructor.name);
 
-      this.healthChecker.start();
+      if (!this.noHealthCheck) this.healthChecker.start();
 
       // Before the dyingCounter reached 0, there is a decent chance our
       // sessions are still alive and kicking. Let's try to revive them.
@@ -407,6 +432,11 @@ export class ReconnectableTransport extends EventEmitter implements ITransport {
           onCancel(message);
         };
         this.emit('invite', { invitation, cancelled });
+      },
+      onMessage: (message: Message) => {
+        const msg = message ? message.request.body : null;
+        // log.info(`Passing the next message to client: ${msg}`, this.constructor.name);
+        this.emit('sessionMessage', msg);
       }
     };
 

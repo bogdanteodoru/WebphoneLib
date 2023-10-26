@@ -1,4 +1,5 @@
 import { ITransportDelegate } from './transport';
+import { RegistererRegisterOptions } from "sip.js/lib/api/registerer-register-options";
 
 export interface IClientOptions {
   account: {
@@ -14,6 +15,8 @@ export interface IClientOptions {
   };
   media: IMedia;
   userAgentString?: string;
+  registererOptions?: RegistererRegisterOptions;
+  settings: any;
 }
 
 export type MediaDeviceId = string | undefined;

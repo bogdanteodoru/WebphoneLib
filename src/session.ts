@@ -68,6 +68,11 @@ export interface ISession {
    */
   endTime: any;
 
+  /**
+   * @returns {} Sip headers map of the call.
+   */
+  sipHeaders: ISipHeader;
+
   accept(): Promise<ISessionAccept | void>;
   reject(rejectOptions?: InvitationRejectOptions): Promise<void>;
   /**
@@ -122,6 +127,21 @@ export interface ISession {
   /* tslint:enable:unified-signatures */
 }
 
+export interface ISipHeaderArray {
+  raw?: string;
+  parsed?: string;
+}
+
+export interface ISipHeader {
+  Via?: ISipHeaderArray[];
+  From?: ISipHeaderArray[];
+  To?: ISipHeaderArray[];
+  Contact?: ISipHeaderArray[];
+  LinkedId?: ISipHeaderArray[];
+  LeadId?: ISipHeaderArray[];
+  Dialer?: ISipHeaderArray[];
+}
+
 /**
  * SIP already returns a reasonPhrase but for backwards compatibility purposes
  * we use this mapping to return an additional reasonCause.
@@ -153,6 +173,7 @@ export class SessionImpl extends EventEmitter implements ISession {
   public readonly stats: SessionStats;
   public readonly audioConnected: Promise<void>;
   public readonly isIncoming: boolean;
+  public readonly sipHeaders: ISipHeader;
   public saidBye: boolean;
   public holdState: boolean;
   public status: SessionStatus = SessionStatus.TRYING;
@@ -187,6 +208,7 @@ export class SessionImpl extends EventEmitter implements ISession {
     super();
     this.session = session;
     this.id = session.request.callId;
+    this.sipHeaders = session.request.headers;
     this.media = new SessionMedia(this, media);
     this.media.on('mediaFailure', () => {
       this.session.bye();
@@ -386,6 +408,7 @@ export class SessionImpl extends EventEmitter implements ISession {
       'endTime',
       'holdState',
       'id',
+      'sipHeaders',
       'isIncoming',
       'media',
       'phoneNumber',
